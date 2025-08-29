@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票数据分析平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>股票数据分析平台</h1>
+        <nav>
+            <a href="/" class="active">首页</a>
+            <a href="/realtime">实时数据</a>
+            <a href="/history">历史数据</a>
+            <a href="/kline">K线图</a>
+            <a href="/filter">股票筛选</a>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <h2>欢迎使用股票数据分析平台</h2>
+        <p>本平台提供股票实时数据、历史数据查询、K线图分析和股票筛选功能。</p>
+        
+        <h3>可用股票列表</h3>
+        <table>
+            <tr>
+                <th>代码</th>
+                <th>名称</th>
+                <th>市场</th>
+                <th>最后更新</th>
+                <th>操作</th>
+            </tr>
+            {% for stock in stocks %}
+            <tr>
+                <td>{{ stock.code }}</td>
+                <td>{{ stock.name }}</td>
+                <td>{{ stock.market }}</td>
+                <td>{{ stock.last_updated }}</td>
+                <td>
+                    <a href="/realtime?code={{ stock.code }}">实时</a> |
+                    <a href="/history?code={{ stock.code }}">历史</a> |
+                    <a href="/kline?code={{ stock.code }}">K线</a> |
+                    <button class="update-btn" data-code="{{ stock.code }}">更新数据</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

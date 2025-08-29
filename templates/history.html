@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史股票数据 - 股票数据分析平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>股票数据分析平台</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/realtime">实时数据</a>
+            <a href="/history" class="active">历史数据</a>
+            <a href="/kline">K线图</a>
+            <a href="/filter">股票筛选</a>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <h2>历史股票数据</h2>
+        
+        <div class="form-group">
+            <form method="get">
+                <label for="stock-select">选择股票：</label>
+                <select id="stock-select" name="code">
+                    {% for stock in stocks %}
+                    <option value="{{ stock.code }}" {% if stock.code == selected_code %}selected{% endif %}>
+                        {{ stock.code }} - {{ stock.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                
+                <label for="frequency-select">选择周期：</label>
+                <select id="frequency-select" name="frequency">
+                    <option value="1d" {% if selected_freq == '1d' %}selected{% endif %}>日线 (1d)</option>
+                    <option value="1w" {% if selected_freq == '1w' %}selected{% endif %}>周线 (1w)</option>
+                    <option value="1M" {% if selected_freq == '1M' %}selected{% endif %}>月线 (1M)</option>
+                    <option value="5m" {% if selected_freq == '5m' %}selected{% endif %}>5分钟线 (5m)</option>
+                    <option value="15m" {% if selected_freq == '15m' %}selected{% endif %}>15分钟线 (15m)</option>
+                    <option value="30m" {% if selected_freq == '30m' %}selected{% endif %}>30分钟线 (30m)</option>
+                    <option value="60m" {% if selected_freq == '60m' %}selected{% endif %}>60分钟线 (60m)</option>
+                </select>
+                
+                <label for="count-select">数据条数：</label>
+                <select name="count">
+                    <option value="30" {% if request.args.get('count', 30)|int == 30 %}selected{% endif %}>30条</option>
+                    <option value="60" {% if request.args.get('count', 30)|int == 60 %}selected{% endif %}>60条</option>
+                    <option value="120" {% if request.args.get('count', 30)|int == 120 %}selected{% endif %}>120条</option>
+                    <option value="240" {% if request.args.get('count', 30)|int == 240 %}selected{% endif %}>240条</option>
+                </select>
+                
+                <button type="submit">查询</button>
+                <button type="button" class="update-btn" data-code="{{ selected_code }}">更新数据</button>
+            </form>
+        </div>
+        
+        {% if error %}
+            <p style="color: red;">{{ error }}</p>
+        {% else %}
+            <table>
+                <tr>
+                    <th>时间</th>
+                    <th>开盘价</th>
+                    <th>最高价</th>
+                    <th>最低价</th>
+                    <th>收盘价</th>
+                    <th>成交量</th>
+                </tr>
+                {% for item in data %}
+                <tr>
+                    <td>{{ item.time }}</td>
+                    <td>{{ item.open }}</td>
+                    <td>{{ item.high }}</td>
+                    <td>{{ item.low }}</td>
+                    <td {% if item.close > item.open %}style="color: red;"{% elif item.close < item.open %}style="color: green;"{% endif %}>
+                        {{ item.close }}
+                    </td>
+                    <td>{{ item.volume }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center;">没有数据</td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% endif %}
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
