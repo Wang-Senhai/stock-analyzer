@@ -1,0 +1,10 @@
+# 环境变量文件（含数据库密码）
+.env
+# Python虚拟环境
+venv/
+# 临时文件
+__pycache__/
+*.pyc
+*.pyo
+# 日志文件
+*.log
