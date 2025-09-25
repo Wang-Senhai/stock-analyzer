@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}股票数据分析平台{% endblock %}</title>
+    <!-- 公共样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 公共导航栏 -->
+    <header>
+        <h1>股票数据分析平台</h1>
+        <nav>
+            <a href="/" {% if request.path == '/' %}class="active"{% endif %}>首页</a>
+            <a href="/realtime" {% if request.path == '/realtime' %}class="active"{% endif %}>实时数据</a>
+            <a href="/history" {% if request.path == '/history' %}class="active"{% endif %}>历史数据</a>
+            <a href="/kline" {% if request.path == '/kline' %}class="active"{% endif %}>K线图</a>
+            <a href="/all-stocks" {% if request.path == '/all-stocks' %}class="active"{% endif %}>全部股票</a>
+            <a href="/favorites" {% if request.path == '/favorites' %}class="active"{% endif %}>自选股票</a>
+        </nav>
+    </header>
+
+    <!-- 页面内容（子页面填充） -->
+    <div class="container">{% block content %}{% endblock %}</div>
+
+    <!-- 公共JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

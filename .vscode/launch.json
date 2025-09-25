@@ -4,7 +4,7 @@
     "configurations": [
         {
             "name": "Flask 调试",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "flask",
             "env": {

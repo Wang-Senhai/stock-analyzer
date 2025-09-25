@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>实时股票数据 - 股票数据分析平台</title>
+    <title>实时数据 - {{ data.name }} - 股票数据分析平台</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
     <header>
@@ -15,14 +16,16 @@
             <a href="/history">历史数据</a>
             <a href="/kline">K线图</a>
             <a href="/filter">股票筛选</a>
+            <a href="/all-stocks">全部股票</a>
+            <a href="/favorites">自选股票</a>
         </nav>
     </header>
     
     <div class="container">
-        <h2>实时股票数据</h2>
+        <h2>实时数据</h2>
         
-        <div class="form-group">
-            <form method="get">
+        <div class="form-group" style="margin-bottom: 20px;">
+            <form method="get" id="realtime-form">
                 <label for="stock-select">选择股票：</label>
                 <select id="stock-select" name="code">
                     {% for stock in stocks %}
@@ -31,45 +34,83 @@
                     </option>
                     {% endfor %}
                 </select>
+                <button type="submit">查询</button>
+                <button type="button" class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i> 刷新
+                </button>
             </form>
         </div>
         
-        <div id="realtime-container">
-            {% if data.error %}
-                <p style="color: red;">{{ data.error }}</p>
-            {% else %}
-                <h3>{{ data.name }} ({{ data.code }})</h3>
-                <p>最新时间: <span id="realtime-time">{{ data.time }}</span></p>
+        {% if error %}
+            <p style="color: red;">{{ error }}</p>
+        {% else %}
+            <div class="stock-info-card">
+                <h3>{{ data.name }}</h3>
                 
-                <div style="display: flex; gap: 20px; margin: 20px 0;">
-                    <div>
-                        <p>最新价格</p>
-                        <p id="realtime-price" style="font-size: 2rem; font-weight: bold;">{{ data.close|round(2) }}</p>
+                <div class="price-info" style="margin: 20px 0;">
+                    <p id="realtime-price" style="font-size: 2rem; font-weight: bold;">{{ data.price|round(2) }}</p>
+                    <p class="change" style="font-size: 1.2rem; {% if data.change > 0 %}color: #e74c3c;{% elif data.change < 0 %}color: #2ecc71;{% endif %}">
+                        {{ data.change }}%
+                    </p>
+                    <p class="update-time">最后更新: {{ data.time }}</p>
+                </div>
+                
+                <div class="stock-details" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 30px;">
+                    <div class="detail-item">
+                        <p class="detail-label">开盘价</p>
+                        <p class="detail-value">{{ data.open|round(2) }}</p>
                     </div>
-                    <div>
-                        <p>开盘价</p>
-                        <p id="realtime-open">{{ data.open|round(2) }}</p>
+                    <div class="detail-item">
+                        <p class="detail-label">最高价</p>
+                        <p class="detail-value">{{ data.high|round(2) }}</p>
                     </div>
-                    <div>
-                        <p>最高价</p>
-                        <p id="realtime-high">{{ data.high|round(2) }}</p>
+                    <div class="detail-item">
+                        <p class="detail-label">最低价</p>
+                        <p class="detail-value">{{ data.low|round(2) }}</p>
                     </div>
-                    <div>
-                        <p>最低价</p>
-                        <p id="realtime-low">{{ data.low|round(2) }}</p>
-                    </div>
-                    <div>
-                        <p>成交量</p>
-                        <p id="realtime-volume">{{ data.volume|int }}</p>
+                    <div class="detail-item">
+                        <p class="detail-label">成交量</p>
+                        <p class="detail-value">{{ data.volume }}</p>
                     </div>
                 </div>
                 
-                <p id="realtime-error" style="color: red;"></p>
-                <input type="hidden" id="stock-code" value="{{ selected_code }}">
-            {% endif %}
-        </div>
+                <div class="action-buttons" style="margin-top: 30px;">
+                    <a href="/kline?code={{ data.code }}" class="btn-primary">
+                        <i class="fas fa-chart-bar"></i> 查看K线图
+                    </a>
+                    <button class="favorite-btn" data-code="{{ data.code }}">
+                        <i class="far fa-heart"></i> 加入自选
+                    </button>
+                </div>
+            </div>
+        {% endif %}
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // 刷新按钮功能
+        document.querySelector('.refresh-btn').addEventListener('click', function() {
+            location.reload();
+        });
+        
+        // 自选按钮功能
+        document.querySelector('.favorite-btn').addEventListener('click', function() {
+            const code = this.getAttribute('data-code');
+            const icon = this.querySelector('i');
+            
+            fetch(`/api/favorite/add/${code}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        this.textContent = '已加入自选 ';
+                        this.prepend(icon);
+                        alert('已添加到自选股票');
+                    }
+                });
+        });
+    </script>
 </body>
 </html>
+    

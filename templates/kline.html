@@ -1,73 +1,270 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K线图分析 - 股票数据分析平台</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <header>
-        <h1>股票数据分析平台</h1>
-        <nav>
-            <a href="/">首页</a>
-            <a href="/realtime">实时数据</a>
-            <a href="/history">历史数据</a>
-            <a href="/kline" class="active">K线图</a>
-            <a href="/filter">股票筛选</a>
-        </nav>
-    </header>
-    
-    <div class="container">
-        <h2>K线图分析</h2>
-        
-        <div class="form-group">
-            <form method="get">
-                <label for="stock-select">选择股票：</label>
-                <select id="stock-select" name="code">
-                    {% for stock in stocks %}
-                    <option value="{{ stock.code }}" {% if stock.code == stock_code %}selected{% endif %}>
-                        {{ stock.code }} - {{ stock.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                
-                <label for="frequency-select">选择周期：</label>
-                <select id="frequency-select" name="frequency">
-                    <option value="1d" {% if selected_freq == '1d' %}selected{% endif %}>日线 (1d)</option>
-                    <option value="1w" {% if selected_freq == '1w' %}selected{% endif %}>周线 (1w)</option>
-                    <option value="1M" {% if selected_freq == '1M' %}selected{% endif %}>月线 (1M)</option>
-                    <option value="5m" {% if selected_freq == '5m' %}selected{% endif %}>5分钟线 (5m)</option>
-                    <option value="15m" {% if selected_freq == '15m' %}selected{% endif %}>15分钟线 (15m)</option>
-                    <option value="30m" {% if selected_freq == '30m' %}selected{% endif %}>30分钟线 (30m)</option>
-                    <option value="60m" {% if selected_freq == '60m' %}selected{% endif %}>60分钟线 (60m)</option>
-                </select>
-                
-                <label for="count-select">K线数量：</label>
-                <select name="count">
-                    <option value="30" {% if request.args.get('count', 60)|int == 30 %}selected{% endif %}>30根</option>
-                    <option value="60" {% if request.args.get('count', 60)|int == 60 %}selected{% endif %}>60根</option>
-                    <option value="120" {% if request.args.get('count', 60)|int == 120 %}selected{% endif %}>120根</option>
-                </select>
-                
-                <button type="submit">查询</button>
-                <button type="button" class="update-btn" data-code="{{ stock_code }}">更新数据</button>
-            </form>
-        </div>
-        
-        {% if error %}
-            <p style="color: red;">{{ error }}</p>
-        {% else %}
-            <h3>{{ stock_name }} ({{ stock_code }}) - {{ selected_freq }} K线图</h3>
-            <div id="kline-container">
-                <canvas id="kline-chart"></canvas>
-            </div>
-            <textarea id="kline-data" style="display: none;">{{ data|tojson }}</textarea>
-        {% endif %}
+{% extends "base.html" %}
+{% block title %}{{ stock_name }} K线图 - 股票数据分析平台{% endblock %}
+
+{% block content %}
+<div class="kline-page-container" style="width: 100%; padding: 20px; box-sizing: border-box; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+    <!-- 顶部操作栏 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0" style="font-size: 18px; font-weight: 600; color: #333;">K线图分析</h2>
+        <button id="refresh-all-btn" class="btn btn-primary" style="padding: 6px 12px; font-size: 14px; background: #0096ff; border: none; border-radius: 4px; cursor: pointer;">
+            <i class="fas fa-sync-alt me-1"></i> 刷新全部数据
+        </button>
     </div>
 
-    <script src="{{ url_for('static', filename='js/chart.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+    <!-- 筛选表单 -->
+    <div class="filter-form d-flex flex-wrap align-items-center gap-2 mb-4" style="background: #f8f9fa; padding: 10px 14px; border-radius: 6px;">
+        <div class="form-group">
+            <label for="stock-select" class="me-1" style="font-size: 14px; color: #666;">股票：</label>
+            <select id="stock-select" name="code" style="padding: 3px 6px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; min-width: 140px;">
+                {% for stock in stocks %}
+                <option value="{{ stock.code }}" {% if stock.code == stock_code %}selected{% endif %}>
+                    {{ stock.code }} - {{ stock.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="frequency-select" class="me-1" style="font-size: 14px; color: #666;">周期：</label>
+            <select id="frequency-select" name="frequency" style="padding: 3px 6px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; min-width: 100px;">
+                <option value="1d" {% if selected_freq == '1d' %}selected{% endif %}>日线 (1d)</option>
+                <option value="1w" {% if selected_freq == '1w' %}selected{% endif %}>周线 (1w)</option>
+                <option value="1M" {% if selected_freq == '1M' %}selected{% endif %}>月线 (1M)</option>
+                <option value="60m" {% if selected_freq == '60m' %}selected{% endif %}>60分钟线 (60m)</option>
+                <option value="30m" {% if selected_freq == '30m' %}selected{% endif %}>30分钟线 (30m)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="count-select" class="me-1" style="font-size: 14px; color: #666;">数量：</label>
+            <select id="count-select" name="count" style="padding: 3px 6px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; min-width: 80px;">
+                <option value="30" {% if request.args.get('count', 60)|int == 30 %}selected{% endif %}>30根</option>
+                <option value="60" {% if request.args.get('count', 60)|int == 60 %}selected{% endif %}>60根</option>
+                <option value="120" {% if request.args.get('count', 60)|int == 120 %}selected{% endif %}>120根</option>
+            </select>
+        </div>
+
+        <button type="button" id="query-btn" class="btn btn-success" style="padding: 3px 12px; font-size: 14px; background: #52c41a; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+            <i class="fas fa-search me-1"></i> 查询
+        </button>
+
+        <button type="button" id="update-data-btn" class="btn btn-warning" style="padding: 3px 12px; font-size: 14px; background: #faad14; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+            <i class="fas fa-download me-1"></i> 更新数据
+        </button>
+    </div>
+
+    <!-- 错误提示 -->
+    {% if error %}
+    <div class="alert alert-error mb-3" style="background: #fff6f6; color: #f5222d; padding: 8px 12px; border: 1px solid #fde2e2; border-radius: 4px;">
+        <i class="fas fa-exclamation-circle me-1"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- 状态提示 -->
+    <div id="loading-tip" style="display: none; text-align: center; padding: 12px; color: #666; font-size: 14px; background: #f8f9fa; border-radius: 4px; margin-bottom: 12px;">
+        <i class="fas fa-spinner fa-spin me-1"></i> 加载中...
+    </div>
+    <div id="empty-tip" style="display: none; text-align: center; padding: 12px; color: #666; font-size: 14px; background: #f8f9fa; border-radius: 4px; margin-bottom: 12px;">
+        <i class="fas fa-chart-bar me-1"></i> 暂无数据，请点击“更新数据”
+    </div>
+
+    <!-- 图表容器：关键修复 -->
+    <div id="kline-container" style="width: 100%; height: 520px; border: 1px solid #ebeef5; border-radius: 6px; background: #fff; padding-bottom: 40px;"></div>
+
+    <!-- 隐藏数据 -->
+    <textarea id="kline-data" style="display: none;">{{ data|tojson }}</textarea>
+    <input type="hidden" id="current-code" value="{{ stock_code }}">
+    <input type="hidden" id="current-freq" value="{{ selected_freq }}">
+    <input type="hidden" id="current-count" value="{{ request.args.get('count', 60) }}">
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/lightweight-charts.standalone.production.js') }}"></script>
+<script>
+let klineChart = null;
+
+window.addEventListener('load', () => {
+    if (typeof LightweightCharts === 'undefined') {
+        alert('K线图库加载失败，请检查文件路径');
+        return;
+    }
+
+    // 1. 解析K线数据（严格校验+自动格式化）
+    const klineDataStr = document.getElementById('kline-data').value;
+    let klineData = [];
+    try {
+        klineData = JSON.parse(klineDataStr) || [];
+        // 自动格式化时间：提取日期部分（兼容带时间的格式）
+        klineData = klineData.map(item => ({
+            ...item,
+            time: item.time.split(' ')[0] // 只保留 YYYY-MM-DD
+        }));
+        // 二次校验纯日期格式
+        klineData.forEach(item => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(item.time)) {
+                throw new Error(`时间格式错误：${item.time} 需为 YYYY-MM-DD`);
+            }
+        });
+    } catch (err) {
+        console.error('数据解析失败：', err);
+        alert('K线数据时间格式错误（需为YYYY-MM-DD）');
+        return;
+    }
+
+    initKlineChart(klineData);
+    bindEvents();
+});
+
+/**
+ * 初始化K线图：彻底修复横轴标签
+ */
+function initKlineChart(data) {
+    const container = document.getElementById('kline-container');
+    if (klineChart) {
+        klineChart.remove(); // 销毁旧图表
+    }
+
+    // 处理空数据
+    if (!data || data.length === 0) {
+        document.getElementById('empty-tip').style.display = 'block';
+        container.style.display = 'none';
+        return;
+    }
+    document.getElementById('empty-tip').style.display = 'none';
+    container.style.display = 'block';
+
+    // 创建图表（重置时间轴配置）
+    klineChart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: container.clientHeight - 40, // 预留底部空间
+        layout: {
+            backgroundColor: '#fff',
+            textColor: '#666'
+        },
+        grid: {
+            vertLines: { color: '#f5f7fa' },
+            horzLines: { color: '#f5f7fa' }
+        },
+        priceScale: {
+            borderColor: '#ebeef5',
+            mode: 0,
+            autoScale: true,
+            borderVisible: true
+        },
+        timeScale: {
+            borderColor: '#ebeef5',
+            timeVisible: true,
+            secondsVisible: false,
+            barSpacing: 5,
+            fixLeftEdge: true,
+            fixRightEdge: true,
+            rightOffset: 10,
+            leftOffset: 10,
+            // 关键：增加底部边距
+            // LightweightCharts v4+ 支持 'tickMarkHeight' 或 'paddingBottom'
+            paddingBottom: 30
+        },
+        crosshair: {
+            mode: 0,
+            vertLine: { color: '#d9d9d9', width: 1, lineStyle: 2 },
+            horzLine: { color: '#d9d9d9', width: 1, lineStyle: 2 }
+        },
+        tooltip: {
+            mode: 0,
+            content: {
+                style: {
+                    backgroundColor: '#fff',
+                    borderColor: '#ebeef5',
+                    borderRadius: 4,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }
+            }
+        }
+    });
+
+    // 添加蜡烛图系列（确保数据类型正确）
+    const candlestickSeries = klineChart.addCandlestickSeries({
+        upColor: '#28a745',
+        downColor: '#dc3545',
+        borderUpColor: '#28a745',
+        borderDownColor: '#dc3545',
+        wickUpColor: '#28a745',
+        wickDownColor: '#dc3545',
+        bodyWidth: 6,
+        wickWidth: 1
+    });
+
+    // 格式化数据（确保时间为字符串，数值为Number）
+    const formattedData = data.map(item => ({
+        time: item.time,
+        open: Number(item.open) || 0,
+        high: Number(item.high) || 0,
+        low: Number(item.low) || 0,
+        close: Number(item.close) || 0
+    }));
+
+    candlestickSeries.setData(formattedData);
+
+    // 修复横轴标签被遮挡：只调整横轴标签高度
+    setTimeout(() => {
+        const chartDiv = container.querySelector('.tv-lightweight-charts');
+        if (chartDiv) {
+            // 只选中横轴标签的div（一般高度为28px，且包含canvas）
+            const xAxisDivs = Array.from(chartDiv.querySelectorAll('div'))
+                .filter(div => div.style.height === '28px' && div.querySelector('canvas'));
+            xAxisDivs.forEach(div => {
+                div.style.height = '150%'; // 增加高度，确保标签完整显示
+            });
+        }
+    }, 300);
+
+    // 窗口resize适配
+    window.addEventListener('resize', () => {
+        if (klineChart) {
+            klineChart.applyOptions({ width: container.clientWidth });
+        }
+    });
+}
+
+/**
+ * 绑定交互事件（保持简洁）
+ */
+function bindEvents() {
+    document.getElementById('query-btn').addEventListener('click', () => {
+        const code = document.getElementById('stock-select').value;
+        const freq = document.getElementById('frequency-select').value;
+        const count = document.getElementById('count-select').value;
+        window.location.href = `/kline?code=${code}&frequency=${freq}&count=${count}`;
+    });
+
+    document.getElementById('update-data-btn').addEventListener('click', () => {
+        const code = document.getElementById('current-code').value;
+        const freq = document.getElementById('current-freq').value;
+        const count = document.getElementById('current-count').value;
+        
+        document.getElementById('loading-tip').style.display = 'block';
+        fetch(`/kline?code=${code}&frequency=${freq}&count=${count}&refresh=1`)
+            .then(res => res.text())
+            .then(html => {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                const newData = JSON.parse(tempDiv.querySelector('#kline-data').value) || [];
+                
+                initKlineChart(newData);
+                document.getElementById('loading-tip').style.display = 'none';
+                alert('数据已更新');
+            })
+            .catch(err => {
+                console.error('更新失败：', err);
+                document.getElementById('loading-tip').style.display = 'none';
+                alert('更新失败，请重试');
+            });
+    });
+
+    document.getElementById('refresh-all-btn').addEventListener('click', () => {
+        window.location.reload();
+    });
+}
+</script>
+{% endblock %}

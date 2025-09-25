@@ -1,92 +1,47 @@
-// 实时数据更新
-function updateRealtimeData(code) {
-    fetch(`/api/realtime/${code}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                document.getElementById('realtime-error').textContent = data.error;
-                return;
-            }
-            
-            document.getElementById('realtime-price').textContent = data.close.toFixed(2);
-            document.getElementById('realtime-open').textContent = data.open.toFixed(2);
-            document.getElementById('realtime-high').textContent = data.high.toFixed(2);
-            document.getElementById('realtime-low').textContent = data.low.toFixed(2);
-            document.getElementById('realtime-volume').textContent = data.volume.toLocaleString();
-            document.getElementById('realtime-time').textContent = data.time;
-            
-            // 更新涨跌状态
-            const priceElement = document.getElementById('realtime-price');
-            if (data.close > data.open) {
-                priceElement.style.color = 'red';
-            } else if (data.close < data.open) {
-                priceElement.style.color = 'green';
-            } else {
-                priceElement.style.color = 'black';
-            }
-        })
-        .catch(error => {
-            console.error('获取实时数据失败:', error);
-        });
+// 通用工具函数
+function formatNumber(num, decimals = 2) {
+    if (isNaN(num)) return '0.00';
+    return num.toFixed(decimals);
 }
 
-// 页面加载完成后执行
+// 页面加载完成后的通用初始化
 document.addEventListener('DOMContentLoaded', function() {
-    // 如果是实时数据页面，设置定时刷新
-    if (document.getElementById('realtime-container')) {
-        const code = document.getElementById('stock-code').value;
-        // 立即更新一次
-        updateRealtimeData(code);
-        // 每30秒更新一次
-        setInterval(() => updateRealtimeData(code), 30000);
-    }
+    // 移除错误的drawKline()调用（这是导致第一个错误的原因）
+    // 保留其他通用逻辑，如导航栏高亮、表单提交等
     
-    // 如果是K线图页面，绘制K线
-    if (document.getElementById('kline-data')) {
-        const klineData = JSON.parse(document.getElementById('kline-data').textContent);
-        drawKline(klineData, 'kline-chart');
-    }
+    // 导航栏当前页面高亮
+    highlightCurrentNav();
     
-    // 股票代码选择变化时提交表单
+    // 股票选择下拉框联动
+    initStockSelect();
+});
+
+// 导航栏当前页面高亮
+function highlightCurrentNav() {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('nav a');
+    
+    navLinks.forEach(link => {
+        if (link.getAttribute('href') === currentPath) {
+            link.classList.add('active');
+        }
+    });
+}
+
+// 股票选择下拉框初始化
+function initStockSelect() {
     const stockSelect = document.getElementById('stock-select');
     if (stockSelect) {
         stockSelect.addEventListener('change', function() {
-            this.form.submit();
+            // 自动提交表单或跳转
+            const form = this.closest('form');
+            if (form) form.submit();
         });
     }
-    
-    // 周期选择变化时提交表单
-    const freqSelect = document.getElementById('frequency-select');
-    if (freqSelect) {
-        freqSelect.addEventListener('change', function() {
-            this.form.submit();
-        });
-    }
-    
-    // 更新数据按钮
-    const updateButtons = document.querySelectorAll('.update-btn');
-    updateButtons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const code = this.getAttribute('data-code');
-            const buttonText = this.textContent;
-            this.textContent = '更新中...';
-            this.disabled = true;
-            
-            fetch(`/update/${code}`)
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    this.textContent = buttonText;
-                    this.disabled = false;
-                    // 刷新页面
-                    location.reload();
-                })
-                .catch(error => {
-                    console.error('更新数据失败:', error);
-                    this.textContent = buttonText;
-                    this.disabled = false;
-                });
-        });
-    });
-});
+}
+
+// 通用的图表工具函数（如需）
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('zh-CN');
+}

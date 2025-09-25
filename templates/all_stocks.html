@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全部股票 - 股票数据分析平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1>股票数据分析平台</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/realtime">实时数据</a>
+            <a href="/history">历史数据</a>
+            <a href="/kline">K线图</a>
+            <a href="/filter">股票筛选</a>
+            <a href="/all-stocks" class="active">全部股票</a>
+            <a href="/favorites">自选股票</a>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <div class="header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>全部股票列表</h2>
+            <div>
+                <button id="update-list-btn" class="btn-primary">
+                    <i class="fas fa-sync-alt"></i> 更新股票列表
+                </button>
+                <span id="update-status" style="margin-left: 10px; color: #666;"></span>
+            </div>
+        </div>
+        
+        <div class="search-filter" style="margin-bottom: 20px;">
+            <input type="text" id="stock-search" placeholder="搜索股票代码或名称..." style="padding: 8px; width: 300px; margin-right: 10px;">
+            <select id="industry-filter" style="padding: 8px;">
+                <option value="">全部行业</option>
+                <option value="指数">指数</option>
+                <option value="白酒">白酒</option>
+                <option value="金融">金融</option>
+                <option value="科技">科技</option>
+                <!-- 更多行业选项 -->
+            </select>
+        </div>
+        
+        <table class="stock-table">
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>市场</th>
+                    <th>行业</th>
+                    <th>市盈率(PE)</th>
+                    <th>市净率(PB)</th>
+                    <th>总市值(亿)</th>
+                    <th>最后更新</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stock in stocks_data.stocks %}
+                <tr>
+                    <td>{{ stock.code }}</td>
+                    <td>{{ stock.name }}</td>
+                    <td>{{ stock.market }}</td>
+                    <td>{{ stock.industry or '未知' }}</td>
+                    <td>{{ stock.pe if stock.pe else 'N/A' }}</td>
+                    <td>{{ stock.pb if stock.pb else 'N/A' }}</td>
+                    <td>{{ stock.total_market_cap if stock.total_market_cap else 'N/A' }}</td>
+                    <td>{{ stock.last_updated.strftime('%Y-%m-%d') if stock.last_updated else 'N/A' }}</td>
+                    <td>
+                        <div style="display: flex; gap: 5px;">
+                            <a href="/realtime?code={{ stock.code }}" class="btn-sm" style="padding: 3px 8px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; font-size: 0.8rem;">
+                                实时
+                            </a>
+                            <a href="/kline?code={{ stock.code }}" class="btn-sm" style="padding: 3px 8px; background-color: #9b59b6; color: white; text-decoration: none; border-radius: 4px; font-size: 0.8rem;">
+                                K线
+                            </a>
+                            <button class="favorite-btn {% if stock.is_favorite %}active{% endif %}" 
+                                    data-code="{{ stock.code }}"
+                                    style="padding: 3px 8px; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+                                           {% if stock.is_favorite %}
+                                               background-color: #e74c3c; color: white;
+                                           {% else %}
+                                               background-color: #ecf0f1; color: #333;
+                                           {% endif %}">
+                                {% if stock.is_favorite %}
+                                    <i class="fas fa-heart"></i> 已自选
+                                {% else %}
+                                    <i class="far fa-heart"></i> 加自选
+                                {% endif %}
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 20px;">没有股票数据</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- 分页控件 -->
+        <div class="pagination" style="margin-top: 20px; text-align: center;">
+            {% if stocks_data.page > 1 %}
+                <a href="/all-stocks?page={{ stocks_data.page - 1 }}" class="page-link" style="display: inline-block; padding: 5px 10px; margin: 0 5px; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #333;">上一页</a>
+            {% endif %}
+            
+            {% for page in range(1, stocks_data.total_pages + 1) %}
+                {% if page == stocks_data.page %}
+                    <span style="display: inline-block; padding: 5px 10px; margin: 0 5px; border: 1px solid #3498db; background-color: #3498db; color: white; border-radius: 4px;">{{ page }}</span>
+                {% else %}
+                    <a href="/all-stocks?page={{ page }}" class="page-link" style="display: inline-block; padding: 5px 10px; margin: 0 5px; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #333;">{{ page }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if stocks_data.page < stocks_data.total_pages %}
+                <a href="/all-stocks?page={{ stocks_data.page + 1 }}" class="page-link" style="display: inline-block; padding: 5px 10px; margin: 0 5px; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #333;">下一页</a>
+            {% endif %}
+            
+            <span style="margin-left: 10px; color: #666;">
+                共 {{ stocks_data.total }} 只股票，当前第 {{ stocks_data.page }}/{{ stocks_data.total_pages }} 页
+            </span>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // 自选按钮点击事件
+        document.querySelectorAll('.favorite-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const code = this.getAttribute('data-code');
+                const isFavorite = this.classList.contains('active');
+                
+                if (isFavorite) {
+                    // 移除自选
+                    fetch(`/api/favorite/remove/${code}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                this.classList.remove('active');
+                                this.innerHTML = '<i class="far fa-heart"></i> 加自选';
+                                this.style.backgroundColor = '#ecf0f1';
+                                this.style.color = '#333';
+                            }
+                        });
+                } else {
+                    // 添加自选
+                    fetch(`/api/favorite/add/${code}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                this.classList.add('active');
+                                this.innerHTML = '<i class="fas fa-heart"></i> 已自选';
+                                this.style.backgroundColor = '#e74c3c';
+                                this.style.color = 'white';
+                            }
+                        });
+                }
+            });
+        });
+        
+        // 更新股票列表
+        document.getElementById('update-list-btn').addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 更新中...';
+            document.getElementById('update-status').textContent = '正在更新股票列表，请稍候...';
+            
+            fetch('/update-stock-list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('update-status').textContent = data.message;
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        document.getElementById('update-status').textContent = '更新失败: ' + data.message;
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-sync-alt"></i> 更新股票列表';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('update-status').textContent = '更新失败，请重试';
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-sync-alt"></i> 更新股票列表';
+                });
+        });
+        
+        // 搜索功能
+        document.getElementById('stock-search').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const rows = document.querySelectorAll('.stock-table tbody tr');
+            
+            rows.forEach(row => {
+                const code = row.querySelector('td:first-child').textContent.toLowerCase();
+                const name = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                
+                if (code.includes(searchTerm) || name.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+        
+        // 行业筛选
+        document.getElementById('industry-filter').addEventListener('change', function() {
+            const industry = this.value;
+            const rows = document.querySelectorAll('.stock-table tbody tr');
+            
+            rows.forEach(row => {
+                const rowIndustry = row.querySelector('td:nth-child(4)').textContent;
+                
+                if (!industry || rowIndustry === industry) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

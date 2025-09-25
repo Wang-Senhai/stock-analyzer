@@ -41,13 +41,29 @@ class StockDatabase:
             
         cursor = self.connection.cursor()
         
-        # 股票列表 table
+        # 股票列表 table - 存储全部股票
         stock_list_table = """
         CREATE TABLE IF NOT EXISTS stock_list (
             code VARCHAR(20) PRIMARY KEY,
             name VARCHAR(100),
             market VARCHAR(10),
+            industry VARCHAR(100),  -- 新增：行业
+            pe FLOAT,  -- 新增：市盈率
+            pb FLOAT,  -- 新增：市净率
+            total_market_cap FLOAT,  -- 新增：总市值
             last_updated DATETIME
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """
+        
+        # 自选股票 table - 存储用户自选股票
+        favorite_stocks_table = """
+        CREATE TABLE IF NOT EXISTS favorite_stocks (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            code VARCHAR(20) NOT NULL,
+            added_time DATETIME NOT NULL,
+            notes TEXT,  -- 备注
+            FOREIGN KEY (code) REFERENCES stock_list(code),
+            UNIQUE KEY unique_favorite (code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """
         
@@ -62,15 +78,41 @@ class StockDatabase:
             low FLOAT,
             close FLOAT,
             volume FLOAT,
+            amount FLOAT,  -- 新增：成交额
             frequency VARCHAR(10),
             UNIQUE KEY unique_record (code, time, frequency),
             FOREIGN KEY (code) REFERENCES stock_list(code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """
         
+        # 新增：股票技术指标表
+        stock_indicators_table = """
+        CREATE TABLE IF NOT EXISTS stock_indicators (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            code VARCHAR(20),
+            time DATETIME,
+            ma5 FLOAT,     -- 5日均线
+            ma10 FLOAT,    -- 10日均线
+            ma20 FLOAT,    -- 20日均线
+            ma60 FLOAT,    -- 60日均线
+            macd FLOAT,    -- MACD
+            macd_diff FLOAT, -- MACD差离值
+            macd_dea FLOAT,  -- MACD信号线
+            rsi FLOAT,     -- RSI相对强弱指数
+            kdj_k FLOAT,   -- KDJ-K值
+            kdj_d FLOAT,   -- KDJ-D值
+            kdj_j FLOAT,   -- KDJ-J值
+            frequency VARCHAR(10),
+            UNIQUE KEY unique_indicator (code, time, frequency),
+            FOREIGN KEY (code) REFERENCES stock_list(code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """
+        
         try:
             cursor.execute(stock_list_table)
+            cursor.execute(favorite_stocks_table)
             cursor.execute(stock_history_table)
+            cursor.execute(stock_indicators_table)
             self.connection.commit()
             print("数据表创建成功")
         except mysql.connector.Error as err:
@@ -78,28 +120,144 @@ class StockDatabase:
         finally:
             cursor.close()
     
-    def insert_stock_list(self, code, name, market):
-        """插入股票基本信息"""
+    # 股票列表相关操作
+    def insert_stock_list(self, code, name, market, industry=None, pe=None, pb=None, total_market_cap=None):
+        """插入或更新股票基本信息"""
         if not self.connection:
             self.connect()
             
         cursor = self.connection.cursor()
         try:
             query = """
-            INSERT INTO stock_list (code, name, market, last_updated)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO stock_list 
+            (code, name, market, industry, pe, pb, total_market_cap, last_updated)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
             name = VALUES(name),
             market = VALUES(market),
+            industry = VALUES(industry),
+            pe = VALUES(pe),
+            pb = VALUES(pb),
+            total_market_cap = VALUES(total_market_cap),
             last_updated = VALUES(last_updated)
             """
-            cursor.execute(query, (code, name, market, datetime.now()))
+            cursor.execute(query, (code, name, market, industry, pe, pb, total_market_cap, datetime.now()))
             self.connection.commit()
         except mysql.connector.Error as err:
             print(f"插入股票列表出错: {err}")
         finally:
             cursor.close()
     
+    def get_all_stocks(self, page=1, page_size=20):
+        """分页获取全部股票列表"""
+        if not self.connection:
+            self.connect()
+            
+        offset = (page - 1) * page_size
+        cursor = self.connection.cursor(dictionary=True)
+        try:
+            # 获取总数
+            cursor.execute("SELECT COUNT(*) as total FROM stock_list")
+            total = cursor.fetchone()['total']
+            
+            # 获取分页数据
+            cursor.execute("""
+                SELECT * FROM stock_list 
+                ORDER BY code 
+                LIMIT %s OFFSET %s
+            """, (page_size, offset))
+            stocks = cursor.fetchall()
+            
+            return {
+                'stocks': stocks,
+                'total': total,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': (total + page_size - 1) // page_size
+            }
+        except mysql.connector.Error as err:
+            print(f"获取全部股票出错: {err}")
+            return {'stocks': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
+        finally:
+            cursor.close()
+    
+    # 自选股票相关操作
+    def add_favorite(self, code, notes=""):
+        """添加股票到自选列表"""
+        if not self.connection:
+            self.connect()
+            
+        cursor = self.connection.cursor()
+        try:
+            query = """
+            INSERT INTO favorite_stocks (code, added_time, notes)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+            added_time = VALUES(added_time),
+            notes = VALUES(notes)
+            """
+            cursor.execute(query, (code, datetime.now(), notes))
+            self.connection.commit()
+            return True
+        except mysql.connector.Error as err:
+            print(f"添加自选股票出错: {err}")
+            return False
+        finally:
+            cursor.close()
+    
+    def remove_favorite(self, code):
+        """从自选列表移除股票"""
+        if not self.connection:
+            self.connect()
+            
+        cursor = self.connection.cursor()
+        try:
+            query = "DELETE FROM favorite_stocks WHERE code = %s"
+            cursor.execute(query, (code,))
+            self.connection.commit()
+            return cursor.rowcount > 0
+        except mysql.connector.Error as err:
+            print(f"移除自选股票出错: {err}")
+            return False
+        finally:
+            cursor.close()
+    
+    def get_favorite_stocks(self):
+        """获取所有自选股票"""
+        if not self.connection:
+            self.connect()
+            
+        cursor = self.connection.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                SELECT s.*, f.added_time, f.notes 
+                FROM favorite_stocks f
+                JOIN stock_list s ON f.code = s.code
+                ORDER BY f.added_time DESC
+            """)
+            return cursor.fetchall()
+        except mysql.connector.Error as err:
+            print(f"获取自选股票出错: {err}")
+            return []
+        finally:
+            cursor.close()
+    
+    def is_favorite(self, code):
+        """检查股票是否在自选列表中"""
+        if not self.connection:
+            self.connect()
+            
+        cursor = self.connection.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM favorite_stocks WHERE code = %s", (code,))
+            return cursor.fetchone() is not None
+        except mysql.connector.Error as err:
+            print(f"检查自选股票出错: {err}")
+            return False
+        finally:
+            cursor.close()
+    
+    # 历史数据相关操作
     def insert_history_data(self, code, df, frequency):
         """插入股票历史数据"""
         if not self.connection:
@@ -113,19 +271,20 @@ class StockDatabase:
                 data.append((
                     code,
                     index,
-                    row['open'],
-                    row['high'],
-                    row['low'],
-                    row['close'],
-                    row['volume'],
+                    row.get('open'),
+                    row.get('high'),
+                    row.get('low'),
+                    row.get('close'),
+                    row.get('volume'),
+                    row.get('amount'),  # 新增成交额
                     frequency
                 ))
             
             # 批量插入
             query = """
             INSERT IGNORE INTO stock_history 
-            (code, time, open, high, low, close, volume, frequency)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (code, time, open, high, low, close, volume, amount, frequency)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.executemany(query, data)
             self.connection.commit()
@@ -135,99 +294,76 @@ class StockDatabase:
         finally:
             cursor.close()
     
-    def get_stock_list(self):
-        """获取所有股票列表"""
+    # 新增：获取股票历史数据方法
+    def get_stock_history(self, code, frequency, limit=100):
+        """从数据库获取股票历史数据"""
         if not self.connection:
             self.connect()
             
         cursor = self.connection.cursor(dictionary=True)
         try:
-            cursor.execute("SELECT * FROM stock_list")
-            return cursor.fetchall()
-        except mysql.connector.Error as err:
-            print(f"获取股票列表出错: {err}")
-            return []
-        finally:
-            cursor.close()
-    
-    def get_stock_history(self, code, frequency, start_date=None, end_date=None, limit=100):
-        """获取股票历史数据"""
-        if not self.connection:
-            self.connect()
-            
-        cursor = self.connection.cursor(dictionary=True)
-        try:
-            query = """
-            SELECT time, open, high, low, close, volume 
-            FROM stock_history 
-            WHERE code = %s AND frequency = %s
-            """
-            params = [code, frequency]
-            
-            if start_date:
-                query += " AND time >= %s"
-                params.append(start_date)
-            
-            if end_date:
-                query += " AND time <= %s"
-                params.append(end_date)
-                
-            query += " ORDER BY time DESC LIMIT %s"
-            params.append(limit)
-            
-            cursor.execute(query, params)
-            result = cursor.fetchall()
-            
-            # 转换为DataFrame
-            if result:
-                df = pd.DataFrame(result)
-                df['time'] = pd.to_datetime(df['time'])
-                df.set_index('time', inplace=True)
-                return df.sort_index()
-            return None
-        except mysql.connector.Error as err:
-            print(f"获取历史数据出错: {err}")
-            return None
-        finally:
-            cursor.close()
-    
-    def filter_stocks(self, conditions):
-        """根据条件筛选股票"""
-        if not self.connection:
-            self.connect()
-            
-        cursor = self.connection.cursor(dictionary=True)
-        try:
-            # 基础查询，获取最新价格
-            query = """
-            SELECT h.code, s.name, h.close, h.time
-            FROM stock_history h
-            JOIN stock_list s ON h.code = s.code
-            WHERE h.frequency = '1d'
-            AND h.time = (
-                SELECT MAX(time) 
+            cursor.execute("""
+                SELECT time, open, high, low, close, volume, amount 
                 FROM stock_history 
-                WHERE code = h.code AND frequency = '1d'
-            )
-            """
+                WHERE code = %s AND frequency = %s
+                ORDER BY time DESC
+                LIMIT %s
+            """, (code, frequency, limit))
             
-            # 添加筛选条件
-            params = []
-            if conditions.get('min_price'):
-                query += " AND h.close >= %s"
-                params.append(conditions['min_price'])
-            
-            if conditions.get('max_price'):
-                query += " AND h.close <= %s"
-                params.append(conditions['max_price'])
+            data = cursor.fetchall()
+            if not data:
+                return None
                 
-            # 可以根据需要添加更多筛选条件
+            # 转换为DataFrame并按时间排序
+            df = pd.DataFrame(data)
+            df['time'] = pd.to_datetime(df['time'])
+            df = df.set_index('time')
+            df = df.sort_index()  # 按时间升序排列
             
-            cursor.execute(query, params)
-            return cursor.fetchall()
+            return df
         except mysql.connector.Error as err:
-            print(f"筛选股票出错: {err}")
-            return []
+            print(f"获取股票历史数据出错: {err}")
+            return None
+        finally:
+            cursor.close()
+    
+    # 技术指标相关操作
+    def insert_indicators(self, code, df, frequency):
+        if not self.connection:
+            self.connect()
+        cursor = self.connection.cursor()
+        try:
+            data = []
+            for index, row in df.iterrows():
+                # 关键：将NaN替换为None（MySQL会识别为NULL）
+                def safe_null(value):
+                    return None if pd.isna(value) else value
+                
+                data.append((
+                    code,
+                    index,
+                    safe_null(row.get('ma5')),    # 处理NaN
+                    safe_null(row.get('ma10')),   # 处理NaN
+                    safe_null(row.get('ma20')),   # 处理NaN
+                    safe_null(row.get('ma60')),   # 处理NaN
+                    safe_null(row.get('macd')),   # 处理NaN
+                    safe_null(row.get('macd_diff')),
+                    safe_null(row.get('macd_dea')),
+                    safe_null(row.get('rsi')),
+                    safe_null(row.get('kdj_k')),
+                    safe_null(row.get('kdj_d')),
+                    safe_null(row.get('kdj_j')),
+                    frequency
+                ))
+            # 插入SQL（不变）
+            query = """INSERT IGNORE INTO stock_indicators 
+                    (code, time, ma5, ma10, ma20, ma60, macd, macd_diff, macd_dea,
+                    rsi, kdj_k, kdj_d, kdj_j, frequency)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+            cursor.executemany(query, data)
+            self.connection.commit()
+        except Exception as err:
+            print(f"插入技术指标出错: {err}")
         finally:
             cursor.close()
     
